@@ -6,6 +6,7 @@ import de.bsi.openai.chatgpt.CompletionRequest;
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.util.ImageHelper;
+import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
@@ -16,6 +17,8 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -35,8 +38,14 @@ import java.io.*;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @Service
 @EnableAsync
@@ -47,6 +56,10 @@ public class EmailConf {
 
     @Autowired
     private OpenAiApiClient client;
+
+    @Autowired
+    private ResourceLoader resourceLoader;
+
 
     private static final String EMAIL = "bottalkermail@gmail.com";
     private static final String PASSWORD = "bouq utxn aefu ispa";
@@ -220,11 +233,15 @@ public class EmailConf {
             bufferedImage = preprocessImage(bufferedImage);
 
             final ITesseract tesseract = new Tesseract();
-            final File tessDataFolder = new ClassPathResource("tessdata").getFile();
-            System.out.println("URL : "+ tessDataFolder.getAbsolutePath() );
-            tesseract.setDatapath(tessDataFolder.getAbsolutePath());
 
+            //final File tessDataFolder = new ClassPathResource("tessdata").getFile();
+            Resource resource = resourceLoader.getResource("classpath:static");
+
+            tesseract.setDatapath(resource.getFile().getAbsolutePath());
+
+            // Effectuer la reconnaissance OCR sur l'image chargée
             final String extractedText = tesseract.doOCR(bufferedImage);
+
             final String response = generateChatGPTResponse(extractedText, from);
             sendEmail(message, bodyPart.getFileName(), response);
         } catch (final Exception e) {
@@ -385,5 +402,90 @@ public class EmailConf {
     private void handleException(String message, Exception e) {
         System.err.println(message);
         e.printStackTrace();
+    }
+
+
+
+
+    public void configureTerasscart(){
+
+
+        // Informations de connexion à la base de données PostgreSQL
+        String url = "jdbc:postgresql://dpg-clcemgjmot1c73dfmjm0-a.oregon-postgres.render.com/ayarinho";
+        String utilisateur = "youssef";
+        String motDePasse = "I0yyHDMiLENpCfqsbSiyanQjFMbBt422";
+
+        try {
+
+            // Charger le pilote JDBC PostgreSQL
+            Class.forName("org.postgresql.Driver");
+
+            // Établir une connexion à la base de données PostgreSQL
+            Connection connexion = DriverManager.getConnection(url, utilisateur, motDePasse);
+
+            // Requête SQL pour récupérer le fichier inséré (vous pouvez remplacer 1 par l'ID approprié)
+            String requeteSelect = "SELECT fichier FROM trainsetdata WHERE id = (SELECT MAX(id) FROM trainsetdata);";
+            PreparedStatement preparedStatementSelect = connexion.prepareStatement(requeteSelect);
+
+            ResultSet resultSet = preparedStatementSelect.executeQuery();
+
+            if (resultSet.next()) {
+                System.out.println("Le fichier a été inséré avec succès dans la base de données.");
+                // Récupérer le contenu du fichier depuis la base de données
+
+                // Récupérer le contenu du fichier depuis la base de données
+                InputStream fichierInputStream = resultSet.getBinaryStream("fichier");
+
+                // Créer un flux de décompression ZipInputStream
+                ZipInputStream zipInputStream = new ZipInputStream(fichierInputStream);
+
+                byte[] buffer = new byte[1024];
+
+                // Parcourir les entrées du fichier ZIP
+                ZipEntry zipEntry;
+
+                while ((zipEntry = zipInputStream.getNextEntry()) != null) {
+                    // Lire le contenu de l'entrée ZIP dans un ByteArrayOutputStream
+                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    int bytesRead;
+                    while ((bytesRead = zipInputStream.read(buffer)) != -1) {
+                        byteArrayOutputStream.write(buffer, 0, bytesRead);
+                    }
+                    byteArrayOutputStream.close();
+
+                    // Traitez le contenu de l'entrée ZIP ici
+                    byte[] fichierBytes = byteArrayOutputStream.toByteArray();
+
+                    // Enregistrez le contenu dans un fichier temporaire
+                    File fichierTemporaire = File.createTempFile("tempfile", ".tmp");
+                    try (FileOutputStream fichierOutputStream = new FileOutputStream(fichierTemporaire)) {
+                        fichierOutputStream.write(fichierBytes);
+                    }
+
+                    // Configurez Tesseract OCR pour utiliser le chemin du fichier temporaire comme dataPath
+                    String cheminTemporaire = fichierTemporaire.getParentFile().getAbsolutePath();
+                    final ITesseract tesseract = new Tesseract();
+                    tesseract.setDatapath(cheminTemporaire);
+
+                    System.out.println("Tesseract OCR est configuré pour utiliser le fichier temporaire.");
+
+                    // Fermez l'entrée ZIP
+                    zipInputStream.closeEntry();
+                }
+
+                // Fermer les ressources
+                zipInputStream.close();
+
+                System.out.println("Le fichier ZIP a été décompressé en mémoire et traité avec succès.");
+            } else {
+                System.out.println("Aucun fichier trouvé dans la base de données.");
+            }
+
+            resultSet.close();
+            preparedStatementSelect.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
