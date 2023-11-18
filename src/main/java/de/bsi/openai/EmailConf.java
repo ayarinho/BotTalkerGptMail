@@ -56,23 +56,11 @@ public class EmailConf {
 
     private Session session;
 
-    @Scheduled(fixedDelay = 2000)
-    public void checkForNewMessages() {
-        try {
-            setupEmailSession();
-            final Store store = connectToEmail();
-            if (store != null) {
-                processInbox(store);
-            } else {
-                System.out.println("Échec de la connexion après plusieurs tentatives.");
-            }
-        } catch (Exception e) {
-            handleException("Erreur lors de la vérification des nouveaux messages.", e);
-        }
-    }
 
-    private void setupEmailSession() {
-        final Properties properties = new Properties();
+    @Scheduled(fixedDelay = 2000)
+    public void checkForNewMessages() throws InterruptedException {
+
+        Properties properties = new Properties();
         properties.setProperty("mail.store.protocol", "imaps");
         properties.setProperty("mail.imaps.host", "imap.gmail.com");
         properties.setProperty("mail.imaps.port", "993");
@@ -81,53 +69,54 @@ public class EmailConf {
         properties.setProperty("mail.imaps.ssl.enable", "true");
         properties.setProperty("mail.imaps.ssl.trust", "*");
         session = Session.getInstance(properties, null);
-    }
 
-    private Store connectToEmail() {
-        Store store = null;
-        int maxAttempts = Integer.MAX_VALUE;
-        int attempts = 0;
-        boolean connected = false;
+        try (Store store = session.getStore("imaps")) {
+            int maxAttempts = Integer.MAX_VALUE;
+            int attempts = 0;
+            boolean connected = false;
 
-        while (!connected && attempts < maxAttempts) {
-            try {
-                store = session.getStore("imaps");
-                store.connect("imap.gmail.com", EMAIL, PASSWORD);
-                connected = true;
-            } catch (MessagingException e) {
-                handleException("Erreur lors de la connexion à la messagerie.", e);
-                attempts++;
-            }
-        }
-
-        return connected ? store : null;
-    }
-
-    private void processInbox(final Store store) {
-        try (Folder inbox = store.getFolder("inbox")) {
-            inbox.open(Folder.READ_ONLY);
-
-            inbox.addMessageCountListener(new MessageCountAdapter() {
-                @Override
-                public void messagesAdded(final MessageCountEvent ev) {
-                    final Message[] messages = ev.getMessages();
-
-                    for (Message message : messages) {
-                        try {
-                            processMessage(message);
-                        } catch (Exception e) {
-                            handleException("Erreur lors du traitement du message.", e);
-                        }
-                    }
+            while (!connected && attempts < maxAttempts) {
+                try {
+                    store.connect("imap.gmail.com", EMAIL, PASSWORD);
+                    connected = true;
+                } catch (MessagingException e) {
+                    e.printStackTrace();
+                    Thread.sleep(5000); // Attendre 5 secondes avant de réessayer
+                    attempts++;
                 }
-            });
-
-            while (true) {
-                inbox.getMessageCount();
-                Thread.sleep(5000);
             }
-        } catch (final Exception e) {
-            handleException("Erreur lors de l'ouverture de la boîte de réception.", e);
+
+            if (connected) {
+                try (Folder inbox = store.getFolder("inbox")) {
+                    inbox.open(Folder.READ_ONLY);
+
+                    inbox.addMessageCountListener(new MessageCountAdapter() {
+                        @Override
+                        public void messagesAdded(final MessageCountEvent ev) {
+                            Message[] messages = ev.getMessages();
+
+                            for (Message message : messages) {
+                                // Traitement du message
+                                processMessage(message);
+                            }
+                        }
+                    });
+
+                    while (true) {
+                        // Vérifier périodiquement les nouveaux messages
+                        inbox.getMessageCount();
+                        Thread.sleep(5000);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt(); // Rétablir le statut d'interruption du thread
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } else {
+                System.out.println("Échec de la connexion après plusieurs tentatives.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
