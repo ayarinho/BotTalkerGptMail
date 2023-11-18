@@ -221,6 +221,7 @@ public class EmailConf {
 
             final ITesseract tesseract = new Tesseract();
             final File tessDataFolder = new ClassPathResource("tessdata").getFile();
+            System.out.println("URL : "+ tessDataFolder.getAbsolutePath() );
             tesseract.setDatapath(tessDataFolder.getAbsolutePath());
 
             final String extractedText = tesseract.doOCR(bufferedImage);
