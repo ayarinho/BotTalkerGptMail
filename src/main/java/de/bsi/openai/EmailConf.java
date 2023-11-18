@@ -5,6 +5,7 @@ import de.bsi.openai.chatgpt.ChatCompletionResponse;
 import de.bsi.openai.chatgpt.CompletionRequest;
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
+import net.sourceforge.tess4j.TesseractException;
 import net.sourceforge.tess4j.util.ImageHelper;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -199,19 +200,12 @@ public class EmailConf {
             for (Row row : sheet) {
                 for (Cell cell : row) {
                     switch (cell.getCellType()) {
-                        case STRING:
-                            content.append(cell.getStringCellValue()).append(" ");
-                            break;
-                        case NUMERIC:
-                            content.append(cell.getNumericCellValue()).append(" ");
-                            break;
-                        case BOOLEAN:
-                            content.append(cell.getBooleanCellValue()).append(" ");
-                            break;
+                        case STRING -> content.append(cell.getStringCellValue()).append(" ");
+                        case NUMERIC -> content.append(cell.getNumericCellValue()).append(" ");
+                        case BOOLEAN -> content.append(cell.getBooleanCellValue()).append(" ");
+
                         // Vous pouvez gérer d'autres types de cellules selon vos besoins
-                        default:
-                            content.append(cell.toString()).append(" ");
-                            break;
+                        default -> content.append(cell.toString()).append(" ");
                     }
                 }
                 content.append("\n");
@@ -225,7 +219,7 @@ public class EmailConf {
         }
     }
 
-    private void processImageAttachment(final Message message, final BodyPart bodyPart, final String from) {
+    private void processImageAttachment(final Message message, final BodyPart bodyPart, final String from) throws MessagingException {
         try {
             final InputStream imageStream = bodyPart.getInputStream();
             BufferedImage bufferedImage = ImageIO.read(imageStream);
@@ -235,17 +229,33 @@ public class EmailConf {
             final ITesseract tesseract = new Tesseract();
 
             //final File tessDataFolder = new ClassPathResource("tessdata").getFile();
-            Resource resource = resourceLoader.getResource("classpath:static");
+            /*Resource resource = resourceLoader.getResource("classpath:static");
 
-            tesseract.setDatapath(resource.getFile().getAbsolutePath());
+            tesseract.setDatapath(resource.getFile().getAbsolutePath());*/
+            /*InputStream inputStream = getClass().getResourceAsStream("/tessdata/eng.traineddata");
+            File tempFile = File.createTempFile("eng", ".traineddata");
+            tempFile.deleteOnExit();
 
-            // Effectuer la reconnaissance OCR sur l'image chargée
+            try (OutputStream outputStream = new FileOutputStream(tempFile)) {
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+            }
+            System.out.println("Temporary file created at: " + tempFile.getAbsolutePath());
+            System.out.println("Data path set to: " + tempFile.getParent());
+
+            tesseract.setDatapath(tempFile.getParent().replace('/', '\\'));
+            // Effectuer la reconnaissance OCR sur l'image chargée*/
             final String extractedText = tesseract.doOCR(bufferedImage);
 
             final String response = generateChatGPTResponse(extractedText, from);
             sendEmail(message, bodyPart.getFileName(), response);
-        } catch (final Exception e) {
-            handleException("Erreur lors du traitement de la pièce jointe d'image.", e);
+
+            // Additional Tesseract setup and usage
+        } catch (MessagingException | IOException | TesseractException ex) {
+            throw new RuntimeException(ex);
         }
     }
 
