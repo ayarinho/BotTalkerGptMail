@@ -10,7 +10,7 @@ public class ScheduledTasks {
     @Autowired
     private RestTemplate restTemplate;
 
-    @Scheduled(fixedRate = 5000)
+    //@Scheduled(fixedRate = 5000)
     public void pingPeriodiquement() {
         String url = "https://gptbot-zpxt.onrender.com/ping";
         String response = restTemplate.getForObject(url, String.class);

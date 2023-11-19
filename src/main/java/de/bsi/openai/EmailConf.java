@@ -336,39 +336,46 @@ public class EmailConf {
         }
     }
 
-    private void sendEmail(final Message originalMessage, final String subject, final String response) {
+    public void sendEmail(Message originalMessage, String subject, String response) {
+        String email = "bottalkermail@gmail.com";
+        String password = "bouq utxn aefu ispa";
+
+        Properties props = new Properties();
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.host", "smtp.gmail.com");
+        props.put("mail.smtp.port", "587");
+        props.put("mail.smtp.ssl.trust", "*");
+
+        Session session = Session.getInstance(props, new Authenticator() {
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(email, password);
+            }
+        });
+
         try {
-            final Properties props = new Properties();
-            props.put("mail.smtp.auth", "true");
-            props.put("mail.smtp.starttls.enable", "true");
-            props.put("mail.smtp.host", "smtp.gmail.com");
-            props.put("mail.smtp.port", "587");
-            props.put("mail.smtp.ssl.trust", "*");
+            MimeMessage replyMessage = new MimeMessage(session);
 
-            final Session session = Session.getInstance(props, new Authenticator() {
-                protected PasswordAuthentication getPasswordAuthentication() {
-                    return new PasswordAuthentication(EMAIL, PASSWORD);
-                }
-            });
+            // Utiliser le même "From" que le message original
+            replyMessage.setFrom(new InternetAddress(email));
 
-            final MimeMessage replyMessage = new MimeMessage(session);
-
-            replyMessage.setFrom(new InternetAddress(EMAIL));
-
-            final Address[] replyToAddresses = originalMessage.getReplyTo();
+            // Répondre au "Reply-To" ou "From" si "Reply-To" n'est pas défini
+            Address[] replyToAddresses = originalMessage.getReplyTo();
             if (replyToAddresses != null && replyToAddresses.length > 0) {
                 replyMessage.setRecipient(Message.RecipientType.TO, replyToAddresses[0]);
             } else {
                 replyMessage.setRecipient(Message.RecipientType.TO, originalMessage.getFrom()[0]);
             }
 
+            // Mettre en place le "Subject" et le "Content"
             replyMessage.setSubject(subject);
             replyMessage.setText(response);
 
+            // Envoyer le message
             Transport.send(replyMessage);
             System.out.println("Réponse au message envoyée avec succès.");
-        } catch (final Exception e) {
-            handleException("Erreur lors de l'envoi de l'e-mail de réponse.", e);
+        } catch (MessagingException e) {
+            e.printStackTrace();
         }
     }
 
