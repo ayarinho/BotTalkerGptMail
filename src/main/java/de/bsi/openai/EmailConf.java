@@ -205,18 +205,19 @@ public class EmailConf {
 
             final ITesseract tesseract = new Tesseract();
 
-            //final File tessDataFolder = new ClassPathResource("tessdata").getFile();
-            /*Resource resource = resourceLoader.getResource("classpath:static");
-            tesseract.setDatapath(resource.getFile().getAbsolutePath());*/
+            tesseract.setDatapath("/app/tessdata");
+            tesseract.setLanguage("eng"); // Définir la langue si nécessaire
 
-            // Effectuer la reconnaissance OCR sur l'image chargée*/
-            final String extractedText = tesseract.doOCR(bufferedImage);
-
-            final String response = generateChatGPTResponse(extractedText, from);
-            sendEmail(message, bodyPart.getFileName(), response);
+            try {
+                String response = tesseract.doOCR(bufferedImage);
+                sendEmail(message, bodyPart.getFileName(), response);
+                System.out.println("Texte extrait : " + response);
+            } catch (TesseractException e) {
+                e.printStackTrace();
+            }
 
             // Additional Tesseract setup and usage
-        } catch (MessagingException | IOException | TesseractException ex) {
+        } catch (MessagingException | IOException ex) {
             throw new RuntimeException(ex);
         }
     }
